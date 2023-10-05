@@ -1,5 +1,5 @@
 use core::fmt;
-use nucleo::{Config, Matcher, Utf32Str};
+use nucleo::{pattern::CaseMatching, pattern::Pattern, Config, Matcher, Utf32Str};
 use std::{
     env,
     io::{self, BufRead},
@@ -29,7 +29,6 @@ impl fmt::Display for MatcherType {
     }
 }
 
-#[rustfmt::skip]
 pub fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -48,6 +47,56 @@ pub fn main() {
         exit(1);
     }
 
+    let stdin = io::stdin();
+    let mut input = vec![];
+    for line in stdin.lock().lines() {
+        if let Ok(line) = line {
+            input.push(line);
+        }
+    }
+
+    // This matching function uses each type of matching technique
+    type_1_matching(&patterns, &input);
+    // This matching uses a nucleo Pattern for matching.
+    type_2_matching(&patterns, &input);
+}
+
+fn type_2_matching(patterns: &Vec<String>, input: &Vec<String>) {
+    let patterns_as_str = patterns.join(" ");
+    let pat = Pattern::parse(&patterns_as_str, CaseMatching::Smart);
+    let config = Config::DEFAULT;
+    let mut matcher = nucleo::Matcher::new(config);
+
+    let start_time = Instant::now();
+    for line in input {
+        println!("line: {line}");
+        let mut vec_of_indices = vec![];
+        let matches = pat.match_list(vec![line.clone()], &mut matcher);
+        if matches.is_empty() {
+            println!("no matches");
+        }
+        for (hit, score) in matches {
+            println!("{hit}: {score}");
+        }
+
+        let utf32str_line = Utf32Str::Ascii(line.as_bytes());
+        // let score = pat.score(utf32str_line, &mut matcher);
+        // println!("score: {:?}", score);
+
+        let ind_score = pat.indices(utf32str_line, &mut matcher, &mut vec_of_indices);
+        let matches = highlight_matches(&utf32str_line.to_string(), vec_of_indices.as_slice());
+        println!(
+            "score: {:?}, vec_of_indices: {:?}, matches: {}",
+            ind_score, vec_of_indices, matches
+        );
+        println!("");
+    }
+
+    eprintln!("Elapsed: {:?}", start_time.elapsed());
+}
+
+#[rustfmt::skip]
+fn type_1_matching(patterns: &Vec<String>, input: &Vec<String>) {
     let config = Config::DEFAULT;
     let mut matcher = Box::new(nucleo::Matcher::new(config));
 
@@ -56,30 +105,28 @@ pub fn main() {
         "method", "match", "score", "elapsed"
     );
     println!("-----------------------|----------------|-------|--------");
-    let stdin = io::stdin();
     let start_time = Instant::now();
-    for line in stdin.lock().lines() {
-        if let Ok(line) = line {
-            let mut indicies = vec![];
-            let utf32str_line = Utf32Str::Ascii(line.as_bytes());
-            for pattern in &patterns {
-            let utf32str_pattern = Utf32Str::Ascii(&pattern.as_bytes());
+    for line in input {
+        let mut indicies = vec![];
+        let utf32str_line = Utf32Str::Ascii(line.as_bytes());
+        for pattern in patterns {
+        let utf32str_pattern = Utf32Str::Ascii(&pattern.as_bytes());
 
-            do_matching(&mut matcher, MatcherType::Fuzzy, utf32str_line, utf32str_pattern, &mut indicies);
-            do_matching(&mut matcher, MatcherType::FuzzyIndices, utf32str_line, utf32str_pattern, &mut indicies);
-            do_matching(&mut matcher, MatcherType::FuzzyGreedy, utf32str_line, utf32str_pattern, &mut indicies);
-            do_matching(&mut matcher, MatcherType::FuzzyGreedyIndices, utf32str_line, utf32str_pattern, &mut indicies);
-            do_matching(&mut matcher, MatcherType::Substring, utf32str_line, utf32str_pattern, &mut indicies);
-            do_matching(&mut matcher, MatcherType::SubstringIndices, utf32str_line, utf32str_pattern, &mut indicies);
-            do_matching(&mut matcher, MatcherType::Exact, utf32str_line, utf32str_pattern, &mut indicies);
-            do_matching(&mut matcher, MatcherType::ExactIndices, utf32str_line, utf32str_pattern, &mut indicies);
-            do_matching(&mut matcher, MatcherType::Prefix, utf32str_line, utf32str_pattern, &mut indicies);
-            do_matching(&mut matcher, MatcherType::PrefixIndices, utf32str_line, utf32str_pattern, &mut indicies);
-            do_matching(&mut matcher, MatcherType::Postfix, utf32str_line, utf32str_pattern, &mut indicies);
-            do_matching(&mut matcher, MatcherType::PostfixIndices, utf32str_line, utf32str_pattern, &mut indicies);
-            }
+        do_matching(&mut matcher, MatcherType::Fuzzy, utf32str_line, utf32str_pattern, &mut indicies);
+        do_matching(&mut matcher, MatcherType::FuzzyIndices, utf32str_line, utf32str_pattern, &mut indicies);
+        do_matching(&mut matcher, MatcherType::FuzzyGreedy, utf32str_line, utf32str_pattern, &mut indicies);
+        do_matching(&mut matcher, MatcherType::FuzzyGreedyIndices, utf32str_line, utf32str_pattern, &mut indicies);
+        do_matching(&mut matcher, MatcherType::Substring, utf32str_line, utf32str_pattern, &mut indicies);
+        do_matching(&mut matcher, MatcherType::SubstringIndices, utf32str_line, utf32str_pattern, &mut indicies);
+        do_matching(&mut matcher, MatcherType::Exact, utf32str_line, utf32str_pattern, &mut indicies);
+        do_matching(&mut matcher, MatcherType::ExactIndices, utf32str_line, utf32str_pattern, &mut indicies);
+        do_matching(&mut matcher, MatcherType::Prefix, utf32str_line, utf32str_pattern, &mut indicies);
+        do_matching(&mut matcher, MatcherType::PrefixIndices, utf32str_line, utf32str_pattern, &mut indicies);
+        do_matching(&mut matcher, MatcherType::Postfix, utf32str_line, utf32str_pattern, &mut indicies);
+        do_matching(&mut matcher, MatcherType::PostfixIndices, utf32str_line, utf32str_pattern, &mut indicies);
         }
     }
+
     eprintln!("\nElapsed: {:?}", start_time.elapsed());
 }
 
