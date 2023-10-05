@@ -55,10 +55,14 @@ pub fn main() {
         }
     }
 
+    let start_time = Instant::now();
     // This matching function uses each type of matching technique
     type_1_matching(&patterns, &input);
+    eprintln!("\nType 1 Elapsed: {:?}", start_time.elapsed());
+
     // This matching uses a nucleo Pattern for matching.
     type_2_matching(&patterns, &input);
+    eprintln!("Type 2 Elapsed: {:?}", start_time.elapsed());
 }
 
 fn type_2_matching(patterns: &Vec<String>, input: &Vec<String>) {
@@ -67,7 +71,6 @@ fn type_2_matching(patterns: &Vec<String>, input: &Vec<String>) {
     let config = Config::DEFAULT;
     let mut matcher = nucleo::Matcher::new(config);
 
-    let start_time = Instant::now();
     for line in input {
         println!("line: {line}");
         let mut vec_of_indices = vec![];
@@ -91,8 +94,6 @@ fn type_2_matching(patterns: &Vec<String>, input: &Vec<String>) {
         );
         println!("");
     }
-
-    eprintln!("Elapsed: {:?}", start_time.elapsed());
 }
 
 #[rustfmt::skip]
@@ -105,7 +106,6 @@ fn type_1_matching(patterns: &Vec<String>, input: &Vec<String>) {
         "method", "match", "score", "elapsed"
     );
     println!("-----------------------|----------------|-------|--------");
-    let start_time = Instant::now();
     for line in input {
         let mut indicies = vec![];
         let utf32str_line = Utf32Str::Ascii(line.as_bytes());
@@ -127,7 +127,6 @@ fn type_1_matching(patterns: &Vec<String>, input: &Vec<String>) {
         }
     }
 
-    eprintln!("\nElapsed: {:?}", start_time.elapsed());
 }
 
 fn do_matching(
