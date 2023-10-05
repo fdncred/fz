@@ -1,8 +1,35 @@
-use nucleo::Utf32Str;
-use std::env;
-use std::io::{self, BufRead};
-use std::process::exit;
+use core::fmt;
+use nucleo::{Config, Matcher, Utf32Str};
+use std::{
+    env,
+    io::{self, BufRead},
+    process::exit,
+    time::Instant,
+};
 
+#[derive(Debug)]
+enum MatcherType {
+    Fuzzy,
+    FuzzyIndices,
+    FuzzyGreedy,
+    FuzzyGreedyIndices,
+    Substring,
+    SubstringIndices,
+    Exact,
+    ExactIndices,
+    Prefix,
+    PrefixIndices,
+    Postfix,
+    PostfixIndices,
+}
+
+impl fmt::Display for MatcherType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[rustfmt::skip]
 pub fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -14,108 +41,114 @@ pub fn main() {
         pattern = arg.to_string();
     }
 
-    // exact = substring_match_1_ascii, substring_match_ascii_with_prefilter, substring_match_ascii, substring_match_1_non_ascii, substring_match_non_ascii
-    // fuzzy_greedy = fuzzy_match_greedy_
-    // fuzzy_optimal = fuzzy_match_optimal
-
     if &pattern == "" {
         eprintln!("Usage: echo <piped_input> | fz <pattern>");
+        eprintln!("    For Nushell try this:");
+        eprintln!(r#"    ["foo-bar", "baz-brr"] | to text | fz foo bar"#);
         exit(1);
     }
 
-    let mut matcher = Box::new(nucleo::Matcher::default());
+    let config = Config::DEFAULT;
+    let mut matcher = Box::new(nucleo::Matcher::new(config));
 
-    println!("{:22} | {}\t\t| {:3}", "method", "match", "score");
-    println!("-----------------------|----------------|------");
+    println!(
+        "{:22} | {}\t\t| {:3} | {}",
+        "method", "match", "score", "elapsed"
+    );
+    println!("-----------------------|----------------|-------|--------");
     let stdin = io::stdin();
+    let start_time = Instant::now();
     for line in stdin.lock().lines() {
         if let Ok(line) = line {
             let mut indicies = vec![];
             let utf32str_line = Utf32Str::Ascii(line.as_bytes());
             let utf32str_pattern = Utf32Str::Ascii(&pattern.as_bytes());
-            // fuzzy_match
-            if let Some(score) = matcher.fuzzy_match(utf32str_line, utf32str_pattern) {
-                let matches = highlight_matches(&line, &[score.into()]);
-                println!("{:22} | {matches}\t| {score:3}", "fuzzy_match");
-            }
-            // fuzzy_indicies
-            if let Some(score) =
-                matcher.fuzzy_indices(utf32str_line, utf32str_pattern, &mut indicies)
-            {
-                // eprintln!(
-                //     "score: {:?}\nline: {:?}\npattern: {:?}\nindicies: {:?}\n",
-                //     score, line, pattern, indicies
-                // );
-                let matches = highlight_matches(&line, indicies.as_slice());
-                println!("{:22} | {matches}\t| {score:3}", "fuzzy_indices",);
-                indicies.clear();
-            }
-            // fuzzy_match_greedy
-            if let Some(score) = matcher.fuzzy_match_greedy(utf32str_line, utf32str_pattern) {
-                let matches = highlight_matches(&line, &[score.into()]);
-                println!("{:22} | {matches}\t| {score:3}", "fuzzy_match_greedy",);
-            }
-            // fuzzy_indicies_greedy
-            if let Some(score) =
-                matcher.fuzzy_indices_greedy(utf32str_line, utf32str_pattern, &mut indicies)
-            {
-                let matches = highlight_matches(&line, indicies.as_slice());
-                println!("{:22} | {matches}\t| {score:3}", "fuzzy_indicies_greedy",);
-                indicies.clear();
-            }
-            // substring_match
-            if let Some(score) = matcher.substring_match(utf32str_line, utf32str_pattern) {
-                let matches = highlight_matches(&line, indicies.as_slice());
-                println!("{:22} | {matches}\t| {score:3}", "substring_match",);
-            }
-            // substring_indicies
-            if let Some(score) =
-                matcher.substring_indices(utf32str_line, utf32str_pattern, &mut indicies)
-            {
-                let matches = highlight_matches(&line, indicies.as_slice());
-                println!("{:22} | {matches}\t| {score:3}", "substring_indicies",);
-                indicies.clear();
-            }
-            // exact_match
-            if let Some(score) = matcher.exact_match(utf32str_line, utf32str_pattern) {
-                let matches = highlight_matches(&line, indicies.as_slice());
-                println!("{:22} | {matches}\t| {score:3}", "exact_match",);
-            }
-            // exact_indicies
-            if let Some(score) =
-                matcher.exact_indices(utf32str_line, utf32str_pattern, &mut indicies)
-            {
-                let matches = highlight_matches(&line, indicies.as_slice());
-                println!("{:22} | {matches}\t| {score:3}", "exact_indicies",);
-                indicies.clear();
-            }
-            // prefix_match
-            if let Some(score) = matcher.prefix_match(utf32str_line, utf32str_pattern) {
-                let matches = highlight_matches(&line, indicies.as_slice());
-                println!("{:22} | {matches}\t| {score:3}", "prefix_match",);
-            }
-            // prefix_indicies
-            if let Some(score) =
-                matcher.prefix_indices(utf32str_line, utf32str_pattern, &mut indicies)
-            {
-                let matches = highlight_matches(&line, indicies.as_slice());
-                println!("{:22} | {matches}\t| {score:3}", "prefix_indicies",);
-                indicies.clear();
-            }
-            // postfix_match
-            if let Some(score) = matcher.postfix_match(utf32str_line, utf32str_pattern) {
-                let matches = highlight_matches(&line, indicies.as_slice());
-                println!("{:22} | {matches}\t| {score:3}", "postfix_match",);
-            }
-            // postfix_indicies
-            if let Some(score) =
-                matcher.postfix_indices(utf32str_line, utf32str_pattern, &mut indicies)
-            {
-                let matches = highlight_matches(&line, indicies.as_slice());
-                println!("{:22} | {matches}\t| {score:3}", "postfix_indicies",);
-                indicies.clear();
-            }
+
+            do_matching(&mut matcher, MatcherType::Fuzzy, utf32str_line, utf32str_pattern, &mut indicies);
+            do_matching(&mut matcher, MatcherType::FuzzyIndices, utf32str_line, utf32str_pattern, &mut indicies);
+            do_matching(&mut matcher, MatcherType::FuzzyGreedy, utf32str_line, utf32str_pattern, &mut indicies);
+            do_matching(&mut matcher, MatcherType::FuzzyGreedyIndices, utf32str_line, utf32str_pattern, &mut indicies);
+            do_matching(&mut matcher, MatcherType::Substring, utf32str_line, utf32str_pattern, &mut indicies);
+            do_matching(&mut matcher, MatcherType::SubstringIndices, utf32str_line, utf32str_pattern, &mut indicies);
+            do_matching(&mut matcher, MatcherType::Exact, utf32str_line, utf32str_pattern, &mut indicies);
+            do_matching(&mut matcher, MatcherType::ExactIndices, utf32str_line, utf32str_pattern, &mut indicies);
+            do_matching(&mut matcher, MatcherType::Prefix, utf32str_line, utf32str_pattern, &mut indicies);
+            do_matching(&mut matcher, MatcherType::PrefixIndices, utf32str_line, utf32str_pattern, &mut indicies);
+            do_matching(&mut matcher, MatcherType::Postfix, utf32str_line, utf32str_pattern, &mut indicies);
+            do_matching(&mut matcher, MatcherType::PostfixIndices, utf32str_line, utf32str_pattern, &mut indicies);
+
         }
+    }
+    eprintln!("\nElapsed: {:?}", start_time.elapsed());
+}
+
+fn do_matching(
+    matcher: &mut Box<Matcher>,
+    matcher_type: MatcherType,
+    utf32str_line: Utf32Str,
+    utf32str_pattern: Utf32Str,
+    indicies: &mut Vec<u32>,
+) {
+    let timing = Instant::now();
+    let (match_score, elapsed) = match matcher_type {
+        MatcherType::Fuzzy => (
+            matcher.fuzzy_match(utf32str_line, utf32str_pattern),
+            timing.elapsed(),
+        ),
+        MatcherType::FuzzyIndices => (
+            matcher.fuzzy_indices(utf32str_line, utf32str_pattern, indicies),
+            timing.elapsed(),
+        ),
+        MatcherType::FuzzyGreedy => (
+            matcher.fuzzy_match_greedy(utf32str_line, utf32str_pattern),
+            timing.elapsed(),
+        ),
+        MatcherType::FuzzyGreedyIndices => (
+            matcher.fuzzy_indices_greedy(utf32str_line, utf32str_pattern, indicies),
+            timing.elapsed(),
+        ),
+        MatcherType::Substring => (
+            matcher.substring_match(utf32str_line, utf32str_pattern),
+            timing.elapsed(),
+        ),
+        MatcherType::SubstringIndices => (
+            matcher.substring_indices(utf32str_line, utf32str_pattern, indicies),
+            timing.elapsed(),
+        ),
+        MatcherType::Exact => (
+            matcher.exact_match(utf32str_line, utf32str_pattern),
+            timing.elapsed(),
+        ),
+        MatcherType::ExactIndices => (
+            matcher.exact_indices(utf32str_line, utf32str_pattern, indicies),
+            timing.elapsed(),
+        ),
+        MatcherType::Prefix => (
+            matcher.prefix_match(utf32str_line, utf32str_pattern),
+            timing.elapsed(),
+        ),
+        MatcherType::PrefixIndices => (
+            matcher.prefix_indices(utf32str_line, utf32str_pattern, indicies),
+            timing.elapsed(),
+        ),
+        MatcherType::Postfix => (
+            matcher.postfix_match(utf32str_line, utf32str_pattern),
+            timing.elapsed(),
+        ),
+        MatcherType::PostfixIndices => (
+            matcher.postfix_indices(utf32str_line, utf32str_pattern, indicies),
+            timing.elapsed(),
+        ),
+    };
+
+    if let Some(score) = match_score {
+        let matches = highlight_matches(&utf32str_line.to_string(), indicies.as_slice());
+        println!(
+            "{:22} | {matches}\t| {score:5} | {:?}",
+            matcher_type.to_string(),
+            elapsed
+        );
+        indicies.clear();
     }
 }
 
