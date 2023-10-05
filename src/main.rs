@@ -35,13 +35,13 @@ pub fn main() {
 
     // arg parsing (manually)
     let mut arg_iter = args.iter().skip(1);
-    let mut pattern = "".to_string();
+    let mut patterns = vec![];
 
     while let Some(arg) = arg_iter.next() {
-        pattern = arg.to_string();
+        patterns.push(arg.to_string());
     }
 
-    if &pattern == "" {
+    if patterns.is_empty() {
         eprintln!("Usage: echo <piped_input> | fz <pattern>");
         eprintln!("    For Nushell try this:");
         eprintln!(r#"    ["foo-bar", "baz-brr"] | to text | fz foo bar"#);
@@ -62,6 +62,7 @@ pub fn main() {
         if let Ok(line) = line {
             let mut indicies = vec![];
             let utf32str_line = Utf32Str::Ascii(line.as_bytes());
+            for pattern in &patterns {
             let utf32str_pattern = Utf32Str::Ascii(&pattern.as_bytes());
 
             do_matching(&mut matcher, MatcherType::Fuzzy, utf32str_line, utf32str_pattern, &mut indicies);
@@ -76,7 +77,7 @@ pub fn main() {
             do_matching(&mut matcher, MatcherType::PrefixIndices, utf32str_line, utf32str_pattern, &mut indicies);
             do_matching(&mut matcher, MatcherType::Postfix, utf32str_line, utf32str_pattern, &mut indicies);
             do_matching(&mut matcher, MatcherType::PostfixIndices, utf32str_line, utf32str_pattern, &mut indicies);
-
+            }
         }
     }
     eprintln!("\nElapsed: {:?}", start_time.elapsed());
