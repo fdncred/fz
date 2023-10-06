@@ -1,9 +1,13 @@
 use core::fmt;
-use nucleo::{pattern::CaseMatching, pattern::Pattern, Config, Matcher, Utf32Str};
+use nucleo::{
+    pattern::{CaseMatching, MultiPattern, Pattern},
+    Config, Injector, Matcher, Nucleo, Utf32Str, Utf32String,
+};
 use std::{
     env,
     io::{self, BufRead},
     process::exit,
+    sync::Arc,
     time::Instant,
 };
 
@@ -63,6 +67,25 @@ pub fn main() {
     // This matching uses a nucleo Pattern for matching.
     type_2_matching(&patterns, &input);
     eprintln!("Type 2 Elapsed: {:?}", start_time.elapsed());
+
+    type_3_matching(&patterns, &input);
+}
+
+fn type_3_matching(patterns: &Vec<String>, input: &Vec<String>) {
+    let mut pat = MultiPattern::new(1);
+    for pattern in patterns {
+        pat.reparse(0, &pattern, CaseMatching::Smart, true);
+    }
+    let config = Config::DEFAULT;
+    let callback: Arc<dyn Fn() + Sync + Send> = Arc::new(|| {
+        println!("callback");
+    });
+    let nuke_matcher: Nucleo<String> = Nucleo::new(config, callback, None, 1);
+    let injector = nuke_matcher.injector();
+    for item in input {
+        let utf32string_item: Utf32String = Utf32String::from(item.clone());
+        injector.push(item.clone(), |dst| dst[0] = utf32string_item);
+    }
 }
 
 fn type_2_matching(patterns: &Vec<String>, input: &Vec<String>) {
